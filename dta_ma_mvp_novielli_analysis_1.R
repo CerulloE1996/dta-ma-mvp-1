@@ -178,48 +178,44 @@ init = list(
             L_Omega_global_nd = m3[1,,])
 
 ######################################################################################################
+# select model to compile
 ################
 # dichotomous Wells  ( imperfect GS )
 #################
-file <- file.path(file = "mvp_wells_CI_dichotomous_Wells.stan") # CI
-file <- file.path(file = "mvp_wells_CD_dichotomous_Wells.stan") # CD
+file <- file.path(file = "mvp_wells_CI_dichotomous.stan") # CI
+file <- file.path(file = "mvp_wells_CD_dichotomous.stan") # CD
 
 #################
 # polytomous Wells 
 #################
 
 ### perfect GS, CI
-#file <- file.path(file = "mvp_wells_CI_random_cutpoints_perfectGS_logit_xu.stan") 
+file <- file.path(file = "mvp_wells_CI_perfectGS.stan") 
 
 ### perfect GS, CD
-file <- file.path(file = "mvp_wells_CD_random_cutpoints_perfectGS_logit_xu.stan") 
+file <- file.path(file = "mvp_wells_CD_perfectGS.stan") 
 
 ### imperfect GS, CI
-file <- file.path(file = "mvp_wells_CI_random_cutpoints_logit_xu.stan") 
+file <- file.path(file = "mvp_wells_CI.stan") 
 
 ### imperfect GS, CD
-file <- file.path(file = "mvp_wells_CD_random_cutpoints_logit_xu.stan") 
+file <- file.path(file = "mvp_wells_CD.stan") 
 
-mod <- cmdstan_model(file)
+mod <- cmdstan_model(file) # compile model
 #############################################################################################
 # MCMC (HMC algorithm)
 #############################################################################################
 n <- 11
-#studies <-c(8,7,11)
 studies <- c(1:n)
 num <- max(ns[studies])
-data =  list( n_studies=n, NS = n, ns=ns[studies], y=y[1:num,,studies], 
+data =  list( n_studies=n,  ns=ns[studies], y=y[1:num,,studies], 
               num_binary_tests = 2, Thr = c(1,1,2),         
               nt = 3, r = array(r_new[, studies , ], dim = c(3,n,4)), 
-              pa = pa2[1:num ,1,studies] , numg = 5000, 
+              numg = 5000, 
               n_patterns = 12,
               ns_cumsum = cumsum(ns[studies]),
               total_n = sum(ns[studies]),
-              r_full = r_full[studies,], 
-              ind = c(0, rep(1, n-1)), 
-              scale1 = 1,
-              n_thresholds = 2,
-              ind2 = c(0, 0, 1))
+              ind = c(0, rep(1, n-1)))
  
 meta_model2 <- mod$sample(
   data = data,
