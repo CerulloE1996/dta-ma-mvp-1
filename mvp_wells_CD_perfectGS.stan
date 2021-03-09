@@ -98,8 +98,8 @@ parameters {
               cholesky_factor_corr[nt] R_diff_L_d_pre[n_studies];
               cholesky_factor_corr[nt] R_diff_L_nd_pre[n_studies];
               real<lower=0,upper=1> p[n_studies]; 
-              ordered[Thr[3]] C_d[n_studies];
-              ordered[Thr[3]] C_nd[n_studies];
+              ordered[Thr[3]] C_d[n_studies]; // create threshold vectors for each polytomous test
+              ordered[Thr[3]] C_nd[n_studies]; // create threshold vectors for each polytomous test
               simplex[Thr[3]+1] phi_d;
               simplex[Thr[3]+1] phi_nd;
               real<lower=0> kappa_d;
@@ -182,8 +182,7 @@ transformed parameters {
             for (i in 1:nt) { // loop over each test - make sure binary tests are at the start 
              real u_d1 =   u_d[n + ns_cumsum[s-1]*ind[s] ,i];
              real u_nd1 = u_nd[n + ns_cumsum[s-1]*ind[s] ,i];
-             // Binary Likelihoods (tests w/ 1 threshold)
-              if (i <= num_binary_tests) { //  Binary tests / 1 threshold - Bernoulli likelihoods
+              if (Thr[i] == 1) { 
               vector[num_binary_tests] bound_d_bin;  
               vector[num_binary_tests] bound_nd_bin;
               bound_d_bin[1:num_binary_tests]  = phi_logit_approx_vec(  -(  to_vector(nu[s,1,1:num_binary_tests])  + prev_d ) / L_Omega_d[s,i,i] ); 
@@ -201,25 +200,27 @@ transformed parameters {
                   y1nd[i]  = log(bound_nd_bin[i]); // Jacobian adjustment
                 }
               }
-             // Ordinal Likelihoods (tests w/ > 1 threshold)
-              else { // Ordinal tests / K thresholds s.t. K > 1 - Categorical likelihoods
+           else {
               vector[Thr[3]] bound_d; 
               vector[Thr[3]] bound_nd;
               bound_d[1:Thr[3]]  =  phi_logit_approx_vec( ( C_d[s,1:Thr[3]]   - ( nu[s,1,3]  + prev_d  ) ) /   L_Omega_d[s,i,i]  ); // diseased
               bound_nd[1:Thr[3]] =  phi_logit_approx_vec( ( C_nd[s,1:Thr[3]]  - ( nu[s,2,3]  + prev_nd ) ) /   L_Omega_nd[s,i,i]   ); // non-diseased
-                  if (y[n,i,s] == 3) {
-                    z_d[i]   = inv_phi_logit_approx(bound_d[2] + (1 - bound_d[2])*u_d1);      
-                    z_nd[i]  = inv_phi_logit_approx(bound_nd[2] + (1 - bound_nd[2])*u_nd1);    
-                    y1d[i]   = log1m(bound_d[2]);  // Jacobian adjustment
-                    y1nd[i]  = log1m(bound_nd[2]); // Jacobian adjustment
+               int K =   (Thr[i] + 1) ; 
+                  if (y[n,i,s] == K) {
+                    z_d[i]   = inv_phi_logit_approx(bound_d[K-1] + (1 - bound_d[K-1])*u_d1);      
+                    z_nd[i]  = inv_phi_logit_approx(bound_nd[K-1] + (1 - bound_nd[K-1])*u_nd1);    
+                    y1d[i]   = log1m(bound_d[K-1]);  // Jacobian adjustment
+                    y1nd[i]  = log1m(bound_nd[K-1]); // Jacobian adjustment
                   }
-                  else if (y[n,i,s] == 2) {
-                    z_d[i]   = inv_phi_logit_approx(bound_d[1] + (bound_d[2] - bound_d[1])*u_d1);      
-                    z_nd[i]  = inv_phi_logit_approx(bound_nd[1] + (bound_nd[2] - bound_nd[1])*u_nd1);    
-                    y1d[i]   = log(  (bound_d[2] - bound_d[1]) );  // Jacobian adjustment
-                    y1nd[i]  = log( (bound_nd[2] - bound_nd[1]) );  // Jacobian adjustment
+                 for (J in 2:(K-1)) {
+                  if (y[n,i,s] == J) {
+                    z_d[i]   = inv_phi_logit_approx(bound_d[J-1] + (bound_d[J] - bound_d[J-1])*u_d1);      
+                    z_nd[i]  = inv_phi_logit_approx(bound_nd[J-1] + (bound_nd[J] - bound_nd[J-1])*u_nd1);    
+                    y1d[i]   = log(  (bound_d[J] - bound_d[J-1]) );  // Jacobian adjustment
+                    y1nd[i]  = log( (bound_nd[J] - bound_nd[J-1]) );  // Jacobian adjustment
                   }
-                else {  // y == 1
+                 }
+                  if (y[n,i,s] == 1) {
                   z_d[i]   = inv_phi_logit_approx(bound_d[1]* u_d1);
                   z_nd[i]  = inv_phi_logit_approx(bound_nd[1]* u_nd1);
                   y1d[i]   = log(bound_d[1]); // Jacobian adjustment
