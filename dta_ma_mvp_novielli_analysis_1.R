@@ -150,7 +150,7 @@ r_full <- array(data= c(r1,r2,r3,r4,r5, r6, r7, r8, r9, r10, r11, r12), dim = c(
 r_full
 ######################################################################################################
 
-n = 11
+n <- 11
 m <- matrix(data = c(1, 0, 0, 0.80), nrow = 2, ncol = 2)
 m2 <- array(data = rep(m,n), dim = c(2,2,n))
 m3 <- array(dim = c(n,2,2))
@@ -208,15 +208,18 @@ mod <- cmdstan_model(file) # compile model
 n <- 11
 studies <- c(1:n)
 num <- max(ns[studies])
-data =  list( n_studies=n,  ns=ns[studies], y=y[1:num,,studies], 
-              num_binary_tests = 2, Thr = c(1,1,2),         
-              nt = 3, r = array(r_new[, studies , ], dim = c(3,n,4)), 
+data =  list( n_studies=n,  
+              ns= ns[studies], 
+              y=y[1:num,,studies], 
+              num_binary_tests = 2, 
+              Thr = c(1,1,2),         
+              nt = 3, 
+              r = array(r_new[, studies , ], dim = c(3,n,4)), 
               numg = 5000, 
-              n_patterns = 12,
               ns_cumsum = cumsum(ns[studies]),
               total_n = sum(ns[studies]),
               ind = c(0, rep(1, n-1)))
- 
+
 meta_model2 <- mod$sample(
   data = data,
   seed = 123,
@@ -224,9 +227,9 @@ meta_model2 <- mod$sample(
   parallel_chains = 4,
   iter_warmup = 1000,
   iter_sampling = 1000, 
-  refresh = 20, 
+  refresh = 50, 
   init = list(init,init,init,init), 
-  adapt_delta = 0.98, 
+  adapt_delta = 0.95, 
   max_treedepth = 9)
 
 meta_model2$cmdstan_diagnose() # view sampler diagnostics
@@ -234,22 +237,32 @@ meta_model2$cmdstan_diagnose() # view sampler diagnostics
 meta_model2r <- rstan::read_stan_csv(meta_model2$output_files())  # convert to rstan CSV
 
 print(meta_model2r, pars= c("Se", "Sp", "Wells_DDimer_BTN_Se", "Wells_DDimer_BTN_Sp",
-                            "Wells_DDimer_BTP_Se", "Wells_DDimer_BTP_Sp", "cov_global_d","cov_global_nd","p"
-                         #   "alpha_d", "alpha_nd", "C_dm",
-                            #"C_dm2",
-                          #  "C_ndm", "C_ndm2",  
-                        #    "sd1", "mu" , "log_diff",
+                            "Wells_DDimer_BTP_Se", "Wells_DDimer_BTP_Sp", "rho_global_d","rho_global_nd","p",
+                            "alpha_d", "alpha_nd", "C_dm",
+                            "beta_d", "beta_nd", 
+                             "C_dm2",
+                            "C_ndm", "C_ndm2" ,
+                              "sd1", "Omega_global_d","Omega_global_nd"
                          #   "Se_pred", "Sp_pred", "Wells_DDimer_BTP_Se_pred", "Wells_DDimer_BTP_Sp_pred",
                       #    "Wells_DDimer_BTN_Se_pred", "Wells_DDimer_BTN_Sp_pred"
-                         #   "L", "M", "H", "p_dm", "mu",
-                       #   "mu_scale_log", "sd_scale"
+                         #   "L", "M", "H", "p_dm", "mu"
 ),
 probs = c(0.025,0.5, 0.975)) 
 
-# save output 
-saveRDS(meta_model2r, file = "Wells_CD_xu_2000_ad0.99_norm10.rds")
+### save output 
+# dichot Wells
+#saveRDS(meta_model2r, file = "Wells_CI_dichot_1st_1000_ad0.95.rds") 
+#saveRDS(meta_model2r, file = "Wells_CI_dichot_2nd_1000_ad0.95.rds") 
+#saveRDS(meta_model2r, file = "Wells_CD_dichot_1st_1000_ad0.95.rds") 
+#saveRDS(meta_model2r, file = "Wells_CD_dichot_2nd_1000_ad0.95.rds") 
 
-print(meta_model2r, pars= c("L_Omega_d", "L_Omega_nd", "alpha_d", "alpha_nd"),probs = c(0.025,0.5, 0.975))
+# poly Wells 
+#saveRDS(meta_model2r, file = "Wells_CI_perfectGS_1000_ad0.95") # M1
+#saveRDS(meta_model2r, file = "Wells_CD_perfectGS_1000_ad0.95") # M2
+#saveRDS(meta_model2r, file = "Wells_CI_1000_ad0.95") # M3
+#saveRDS(meta_model2r, file = "Wells_CD_1000_ad0.95") # M4
+
+#print(meta_model2r, pars= c("L_Omega_d", "L_Omega_nd", "alpha_d", "alpha_nd", "C_d", "C_nd"),probs = c(0.025,0.5, 0.975))
 
 #############################################################################################
 # observed - expected correlation plots 
@@ -259,12 +272,12 @@ dc <- round(summary(meta_model2r, probs = c(0.025,  0.5, 0.975), pars = c("dc"))
 dc_l <- round(summary(meta_model2r, probs = c(0.025,  0.5, 0.975), pars = c("dc"))$summary[,4],3) ; dc_l
 dc_u <- round(summary(meta_model2r, probs = c(0.025,  0.5, 0.975), pars = c("dc"))$summary[,6],3) ; dc_u
 
-dc_data <- tibble(dc, dc_l, dc_u, `test-pair` = as.factor(c(rep("Ref vs D-Dimer", n), rep("Ref vs Wells",n),rep("D-Dimer vs Wells",n))), 
+dc_data <- tibble(dc, dc_l, dc_u, `test-pair` = as.factor(c(rep("Ultrasound vs D-Dimer", n), rep("Ultrasound vs Wells",n),rep("D-Dimer vs Wells",n))), 
                   obs = seq(1, length(dc), by = 1))
 
 cutoff <- data.frame( x = c(-Inf, Inf), y = 0, cutoff = factor(0) )
 
-#tiff("wells_ppc_corr_residuals_scale.tif",units = "in", width = 10, height=4, res=800, compression = "lzw")
+tiff("wells_ppc_corr_residuals.tif",units = "in", width = 10, height=4, res=800, compression = "lzw")
 
 ggplot(data = dc_data, aes(y = dc, x=obs, colour = `test-pair`)) + geom_point(size = 3) + 
   geom_errorbar(aes(ymin=dc_l, ymax=dc_u), width= 0.75, position=position_dodge(.9)) +
@@ -276,7 +289,7 @@ ggplot(data = dc_data, aes(y = dc, x=obs, colour = `test-pair`)) + geom_point(si
   theme(text = element_text(size=14),
         axis.text.x = element_text()) 
 
-#dev.off()
+dev.off()
 
 #############################################################################################
 # observed - expected table count plots 
@@ -285,13 +298,13 @@ dt <-   round(summary(meta_model2r, probs = c(0.025,  0.5, 0.975), pars = c("dt"
 dt_l <- round(summary(meta_model2r, probs = c(0.025,  0.5, 0.975), pars = c("dt"))$summary[,4],3) ; dt_l
 dt_u <- round(summary(meta_model2r, probs = c(0.025,  0.5, 0.975), pars = c("dt"))$summary[,6],3) ; dt_u
 
-dt_data <- tibble(dt, dt_l, dt_u, `test-pair` = as.factor(c(rep("Ref vs D-Dimer", n*4), rep("Ref vs Wells",n*4),
+dt_data <- tibble(dt, dt_l, dt_u, `test-pair` = as.factor(c(rep("Ultrasound vs D-Dimer", n*4), rep("Ultrasound vs Wells",n*4),
                                                            rep("D-Dimer vs Wells",n*4))), 
                                                            obs = seq(1, length(dt), by = 1))
 
 cutoff <- data.frame( x = c(-Inf, Inf), y = 0, cutoff = factor(0) )
 
-#tiff("wells_ppc_corr_tables_scale.tif",units = "in", width = 8, height=6, res=500, compression = "lzw")
+tiff("wells_ppc_corr_tables.tif",units = "in", width = 8, height=6, res=800, compression = "lzw")
 
     ggplot(data = dt_data, aes(y = dt, x=obs, colour = `test-pair`)) + 
       geom_point(size = 1) + 
@@ -307,7 +320,7 @@ cutoff <- data.frame( x = c(-Inf, Inf), y = 0, cutoff = factor(0) )
       theme(legend.position="none") +
       facet_wrap( ~ `test-pair`, scales = "free", dir = "v")
 
-#dev.off()
+dev.off()
 #############################################################################################
 # Trace and posterior density plots
 #############################################################################################
@@ -321,6 +334,8 @@ stan_trace(meta_model2r, pars = c("alpha_d", "alpha_nd"))
 
 stan_trace(meta_model2r, pars = c("sd_scale", "nu_scales_log"))
 stan_trace(meta_model2r, pars = c("nu"))
+stan_trace(meta_model2r, pars = c("C_nd"))
+stan_trace(meta_model2r, pars = c("C_d"))
 
 stan_trace(meta_model2r, pars = c("a1_m_raw", "a2_m_raw", "a3_m_raw"))
 stan_trace(meta_model2r, pars = c("L_Omega_d"))
@@ -359,10 +374,10 @@ mod_loo
 ## Figure for summary of results from 4 models for section 4.2 
 ##############################################################################
 
-m1 <- readRDS(file = "Wells_CI_perfectGS_xu_1000_norm10.rds")   ###  M1 - perfect GS, CI
-m2 <- readRDS(file = "Wells_CD_perfectGS_xu_1000_ad0.95_norm10.rds")   ###  M2 - perfect GS, CD
-m3 <- readRDS(file = "Wells_CI_xu_1000_norm10.rds")   ###  M3 - IGS, CI
-m4 <- readRDS(file = "Wells_CD_xu_1000_ad0.95_norm10.rds")   ###  M4 - IGS, CD
+m1 <- readRDS(file = "Wells_CI_perfectGS_1000_ad0.95.rds")   ###  M1 - perfect GS, CI
+m2 <- readRDS(file = "Wells_CD_perfectGS_1000_ad0.95.rds")   ###  M2 - perfect GS, CD
+m3 <- readRDS(file = "Wells_CI_1000_ad0.95.rds")   ###  M3 - IGS, CI
+m4 <- readRDS(file = "Wells_CD_1000_ad0.95.rds")   ###  M4 - IGS, CD
 
 models <- list(m1, m2, m3, m4)
 
@@ -456,14 +471,14 @@ for (i in 1:length(models)) {
                                                                                             6.9+0.4*(i-1), 
                                                                                             9.9+0.4*(i-1), 
                                                                                             12.9+0.4*(i-1)), 
-                               label  = factor(c("Referemce", "D-Dimer", "Wells", 
-                                                 "Wells & D-Dimer, BTN",
-                                                 "Wells & D-Dimer, BTP"), 
-                                               levels = c("Wells & D-Dimer, BTP",
-                                                          "Wells & D-Dimer, BTN",
+                               label  = factor(c("Ultrasound", "D-Dimer", "Wells", 
+                                                 "Wells & D-Dimer, believe the negatives",
+                                                 "Wells & D-Dimer, believe the positives"), 
+                                               levels = c("Wells & D-Dimer, believe the positives",
+                                                          "Wells & D-Dimer, believe the negatives",
                                                           "Wells", 
                                                           "D-Dimer",
-                                                          "Referemce")),
+                                                          "Ultrasound")),
                                Model = factor(rep(i,  5)))
     
     data_Sp_mod[[i]] <- data.frame(m=m2_mod1[[i]],l=l2_mod1[[i]],u=u2_mod1[[i]], location =  c(0.9+0.4*(i-1), 
@@ -471,14 +486,14 @@ for (i in 1:length(models)) {
                                                                                                6.9+0.4*(i-1), 
                                                                                                9.9+0.4*(i-1), 
                                                                                                12.9+0.4*(i-1)),
-                               label  = factor(c("Referemce", "D-Dimer", "Wells", 
-                                                 "Wells & D-Dimer, BTN",
-                                                 "Wells & D-Dimer, BTP"), 
-                                               levels = c("Wells & D-Dimer, BTP",
-                                                          "Wells & D-Dimer, BTN",
+                               label  = factor(c("Ultrasound", "D-Dimer", "Wells", 
+                                                 "Wells & D-Dimer, believe the negatives",
+                                                 "Wells & D-Dimer, believe the positives"), 
+                                               levels = c("Wells & D-Dimer, believe the positives",
+                                                          "Wells & D-Dimer, believe the negatives",
                                                           "Wells", 
                                                           "D-Dimer",
-                                                          "Referemce")),
+                                                          "Ultrasound")),
                                Model = factor(rep(i, 5)))
     
     ####### wells categories
@@ -504,13 +519,17 @@ require(data.table)
 # use rbindlist to put all models in same data frame
 data_Se <- rbindlist(data_Se_mod)
 data_Sp <- rbindlist(data_Sp_mod)
-data_d <- rbindlist(data_d_mod1)
+data_d  <- rbindlist(data_d_mod1)
 data_nd <- rbindlist(data_nd_mod1)
 
 data_Se$Model<- factor(data_Se$Model, labels =c("M1: Perfect GS, CI", 
                                                 "M2: Perfect GS, CD",
                                                 "M3: Imperfect GS, CI", 
                                                 "M4: Imperfect GS, CD"))
+
+
+data_Se$Model <- factor(data_Se$Model, levels=rev(levels(data_Se$Model)))
+data_Se$Model
 
 data_Se$Mod = c(rep("Perfect GS, CI", 5), 
                 rep("Perfect GS, CD", 5),
@@ -523,6 +542,8 @@ data_Sp$Model<- factor(data_Sp$Model, labels =c("M1: Perfect GS, CI",
                                                 "M3: Imperfect GS, CI", 
                                                 "M4: Imperfect GS, CD"))
 
+data_Sp$Model <- factor(data_Sp$Model, levels=rev(levels(data_Sp$Model)))
+
 data_Sp$Mod = c(rep("Perfect GS, CI", 5),
                 rep("Perfect GS, CD", 5),
                 rep("Imperfect GS, CI", 5),
@@ -533,13 +554,13 @@ data_d$Model<- factor(data_d$Model, labels =c("M1: Perfect GS, CI",
                                               "M2: Perfect GS, CD",
                                               "M3: Imperfect GS, CI", 
                                               "M4: Imperfect GS, CD"))
-
+data_d$Model <- factor(data_d$Model, levels=rev(levels(data_d$Model)))
 
 data_nd$Model<- factor(data_nd$Model, labels =c("M1: Perfect GS, CI", 
                                                 "M2: Perfect GS, CD",
                                                 "M3: Imperfect GS, CI", 
                                                 "M4: Imperfect GS, CD"))
-
+data_nd$Model <- factor(data_nd$Model, levels=rev(levels(data_nd$Model)))
 
 ################# plot 
 
@@ -549,12 +570,12 @@ cat_d_plot <- ggplot(data_d, aes(x=location, y = m, ymin= l,ymax= u, shape = Mod
   coord_flip() + 
   theme_bw()  + 
   xlab("") + 
-  ylab("Diseased") + 
+  ylab("%(Belong in Wells strata | diseased)") + 
   theme(legend.position = "none") + 
   theme(axis.ticks = element_blank()) + 
   theme(text = element_text(size=15), 
         axis.text.x = element_text(size = 10)) + 
-  scale_y_continuous(breaks = seq(0, 1, 0.10), limits = c(0, 1)) + 
+  scale_y_continuous(breaks = seq(0, 1, 0.10), limits = c(0, 1), labels = seq(0, 100, 10)) + 
   scale_x_discrete( labels = rep("  ", length(data_Se$location))) + 
   geom_text(aes( label = paste0( m*100," ", "[",l*100,",", u*100 , "]") ,hjust = -0.2, vjust = -0.25), alpha = 0.35, size = 4.5) 
 
@@ -566,12 +587,12 @@ cat_nd_plot <- ggplot(data_nd, aes(x=location, y = m, ymin= l,ymax= u, shape = M
   coord_flip() + 
   theme_bw()  + 
   xlab("") + 
-  ylab("Non-diseased") + 
+  ylab("%(Belong in Wells strata | non-diseased)") + 
   theme(axis.ticks = element_blank()) + 
   theme(legend.title = element_blank()) + 
   theme(text = element_text(size=16), 
         axis.text.x = element_text(size = 10))+ 
-  scale_y_continuous(breaks = seq(0, 1, 0.10), limits = c(0, 1)) + 
+  scale_y_continuous(breaks = seq(0, 1, 0.10), limits = c(0, 1), labels = seq(0, 100, 10)) + 
   scale_x_discrete( labels = rep("  ", length(data_Se$location))) + 
   geom_text(aes( label = paste0( m*100," ", "[",l*100,",", u*100 , "]") ,hjust = -0.2, vjust = -0.25), alpha = 0.35, size = 4.5) +
   theme(legend.title = element_text(size = 0), 
@@ -594,7 +615,7 @@ se_plot <- ggplot(tibble(data_Se), aes(x=as.numeric(location), y = m, ymin= l,ym
   theme(axis.ticks = element_blank()) + 
   theme(text = element_text(size=16), 
         axis.text.x = element_text(size = 10))+ 
-  scale_y_continuous(breaks = seq(0, 1, 0.10), limits = c(0,1)) + 
+  scale_y_continuous(breaks = seq(0, 1, 0.10), limits = c(0,1), labels = seq(0, 100, 10)) + 
   scale_x_discrete( labels = rep("  ", length(data_Se$location))) + 
   geom_text(aes( label = paste0( m*100," ", "[",l*100,",", u*100 , "]") ,hjust = 1.1, vjust = -0.25), alpha = 0.35, size = 4) 
 
@@ -611,41 +632,24 @@ sp_plot <- ggplot(data_Sp, aes(x=location, y = m, ymin= l,ymax= u, shape = Model
   theme(legend.title = element_blank()) + 
   theme(text = element_text(size=16), 
         axis.text.x = element_text(size = 10))+ 
-  scale_y_continuous(breaks = seq(0, 1, 0.10), limits = c(0, 1)) + 
+  scale_y_continuous(breaks = seq(0, 1, 0.10), limits = c(0, 1), labels = seq(0, 100, 10)) + 
   scale_x_discrete( labels = rep("  ", length(data_Se$location))) + 
   geom_text(aes( label = paste0( m*100," ", "[",l*100,",", u*100 , "]") ,hjust = 1.1, vjust = -0.25), alpha = 0.35, size = 4) +
   theme(legend.title = element_text(size = 0), 
         legend.text  = element_text(size = 12))
 
-
 sp_plot
 
-tiff("wells_figure_summary.tif",units = "in", width = 9, height=7, res=500, compression = "lzw")
+tiff("wells_figure_summary.tif",units = "in", width = 10, height=7, res=800, compression = "lzw")
 se_plot + sp_plot
 dev.off()
 
-tiff("wells_figure_cats.tif",units = "in", width = 9, height=5, res=500, compression = "lzw")
+tiff("wells_figure_cats.tif",units = "in", width = 10, height=5, res=800, compression = "lzw")
 cat_d_plot + cat_nd_plot
 dev.off()
 
-stan_plot(models[[1]], pars = c("p"), ncol = 1, show_density = T, ci_level = 0.80, outer_level = 0.95)
-stan_trace(models[[1]], pars = c("p"))
-
-stan_plot(models[[2]], pars = c("p"), ncol = 1, show_density = T, ci_level = 0.80, outer_level = 0.95)
-stan_trace(models[[2]], pars = c("p"))
-
-stan_plot(models[[3]], pars = c("p"), ncol = 1, show_density = T, ci_level = 0.80, outer_level = 0.95)
-stan_trace(models[[3]], pars = c("p"))
-
-stan_plot(models[[4]], pars = c("p"), ncol = 1, show_density = T, ci_level = 0.80, outer_level = 0.95)
-stan_trace(models[[4]], pars = c("p"))
-
-stan_plot(models[[5]], pars = c("p"), ncol = 1, show_density = T, ci_level = 0.80, outer_level = 0.95)
-stan_trace(models[[5]], pars = c("p"))
-
-
-##############################
-####### ROC plot
+########################################
+####### sROC plot
 ########################################
 # load in the model
 mod <- models[[4]] # M4
@@ -683,14 +687,14 @@ require(data.table)
 cred <- rbindlist(cred_1, idcol = TRUE)
 cred_p <- rbindlist(cred_1p, idcol = TRUE)
 
-cred2 <- mutate(cred,  Test = factor(.id, label  = factor(c("Referemce", "D-Dimer", "Wells", 
-                                                            "Wells & D-Dimer, BTN",
-                                                            "Wells & D-Dimer, BTP"), 
-                                                          levels = c("Wells & D-Dimer, BTP",
-                                                                     "Wells & D-Dimer, BTN",
+cred2 <- mutate(cred,  Test = factor(.id, label  = factor(c("Ultrasound", "D-Dimer", "Wells", 
+                                                            "Wells & D-Dimer, believe the negatives",
+                                                            "Wells & D-Dimer, believe the positives"), 
+                                                          levels = c("Wells & D-Dimer, believe the positives",
+                                                                     "Wells & D-Dimer, believe the negatives",
                                                                      "Wells", 
                                                                      "D-Dimer",
-                                                                     "Referemce"))))
+                                                                     "Ultrasound"))))
 
 # in inv_probit space
 g <- ggplot(data = cred2, aes(x = x, y = y, colour = Test))  + 
@@ -706,14 +710,14 @@ View(pb$data[[2]])
 el = pb$data[[1]][c("x","y", "group")]
 
   
-credible_region <- tibble(x = pnorm2(el$x), y = pnorm2(el$y), Test = factor(el$group, label  = factor(c("Referemce", "D-Dimer", "Wells", 
-                                                                                                        "Wells & D-Dimer, BTN",
-                                                                                                        "Wells & D-Dimer, BTP"), 
-                                                                                                      levels = c("Wells & D-Dimer, BTP",
-                                                                                                                 "Wells & D-Dimer, BTN",
+credible_region <- tibble(x = pnorm2(el$x), y = pnorm2(el$y), Test = factor(el$group, label  = factor(c("Ultrasound", "D-Dimer", "Wells", 
+                                                                                                        "Wells & D-Dimer, believe the negatives",
+                                                                                                        "Wells & D-Dimer, believe the positives"), 
+                                                                                                      levels = c("Wells & D-Dimer, believe the positives",
+                                                                                                                 "Wells & D-Dimer, believe the negatives",
                                                                                                                  "Wells", 
                                                                                                                  "D-Dimer",
-                                                                                                                 "Referemce"))))
+                                                                                                                 "Ultrasound"))))
 credible_region
 
 
@@ -739,14 +743,14 @@ require(data.table)
 pred <- rbindlist(pred_1, idcol = TRUE)
 pred_p <- rbindlist(pred_1p, idcol = TRUE)
 
-pred2 <- mutate(pred,  Test = factor(.id, label  = factor(c("Referemce", "D-Dimer", "Wells", 
-                                                            "Wells & D-Dimer, BTN",
-                                                            "Wells & D-Dimer, BTP"), 
-                                                          levels = c("Wells & D-Dimer, BTP",
-                                                                     "Wells & D-Dimer, BTN",
+pred2 <- mutate(pred,  Test = factor(.id, label  = factor(c("Ultrasound", "D-Dimer", "Wells", 
+                                                            "Wells & D-Dimer, believe the negatives",
+                                                            "Wells & D-Dimer, believe the positives"), 
+                                                          levels = c("Wells & D-Dimer, believe the positives",
+                                                                     "Wells & D-Dimer, believe the negatives",
                                                                      "Wells", 
                                                                      "D-Dimer",
-                                                                     "Referemce"))))
+                                                                     "Ultrasound"))))
 
 
 g <- ggplot(data = pred2, aes(x = x, y = y, colour = Test))  + 
@@ -762,14 +766,14 @@ View(pb$data[[2]])
 el = pb$data[[1]][c("x","y", "group")]
 
 
-pred_region <- tibble(x = pnorm2(el$x), y = pnorm2(el$y), Test = factor(el$group, label  = factor(c("Referemce", "D-Dimer", "Wells", 
-                                                                                                      "Wells & D-Dimer, BTN",
-                                                                                                      "Wells & D-Dimer, BTP"), 
-                                                                                                    levels = c("Wells & D-Dimer, BTP",
-                                                                                                               "Wells & D-Dimer, BTN",
+pred_region <- tibble(x = pnorm2(el$x), y = pnorm2(el$y), Test = factor(el$group, label  = factor(c("Ultrasound", "D-Dimer", "Wells", 
+                                                                                                      "Wells & D-Dimer, believe the negatives",
+                                                                                                      "Wells & D-Dimer, believe the positives"), 
+                                                                                                    levels = c("Wells & D-Dimer, believe the positives",
+                                                                                                               "Wells & D-Dimer, believe the negatives",
                                                                                                                "Wells", 
                                                                                                                "D-Dimer",
-                                                                                                               "Referemce"))))
+                                                                                                               "Ultrasound"))))
 pred_region
 
 
@@ -787,21 +791,21 @@ median_sens <- c(round(summary(mod, probs = c(0.025,  0.5, 0.975), pars = c("Se"
 median_spec <- c(round(summary(mod, probs = c(0.025,  0.5, 0.975), pars = c("Sp"))$summary[,5], 2), 
                  round(summary(mod, probs = c(0.025,  0.5, 0.975), pars = c("Wells_DDimer_BTN_Sp", "Wells_DDimer_BTP_Sp"))$summary[,5], 2))
 
-medians <- tibble(median_sens = median_sens, median_spec = median_spec, Test = factor( c(1:5), label  = factor(c("Referemce", "D-Dimer", "Wells", 
-                                                                                                         "Wells & D-Dimer, BTN",
-                                                                                                         "Wells & D-Dimer, BTP"), 
-                                                                                                       levels = c("Wells & D-Dimer, BTP",
-                                                                                                                  "Wells & D-Dimer, BTN",
+medians <- tibble(median_sens = median_sens, median_spec = median_spec, Test = factor( c(1:5), label  = factor(c("Ultrasound", "D-Dimer", "Wells", 
+                                                                                                         "Wells & D-Dimer, believe the negatives",
+                                                                                                         "Wells & D-Dimer, believe the positives"), 
+                                                                                                       levels = c("Wells & D-Dimer, believe the positives",
+                                                                                                                  "Wells & D-Dimer, believe the negatives",
                                                                                                                   "Wells", 
                                                                                                                   "D-Dimer",
-                                                                                                                  "Referemce"))))
+                                                                                                                  "Ultrasound"))))
 
 print(mod, pars= c("se"),   probs = c(0.025,0.5, 0.975))
 
 s_sens <- c(round(summary(mod, probs = c(0.025,  0.5, 0.975), pars = c("se"))$summary[,5], 5))
 s_spec <- c(round(summary(mod, probs = c(0.025,  0.5, 0.975), pars = c("sp"))$summary[,5], 5))
 
-ss <- tibble(s_sens = s_sens, s_spec = s_spec, Test = factor( rep(c(1:3), 11), label  = factor(c("Referemce", "D-Dimer", "Wells"),
+ss <- tibble(s_sens = s_sens, s_spec = s_spec, Test = factor( rep(c(1:3), 11), label  = factor(c("Ultrasound", "D-Dimer", "Wells"),
                                                                                                                
                                                                                                                levels = c(
                                                                                                                           "Wells", 
@@ -828,7 +832,7 @@ g <- ggplot(data = medians, aes(y=median_sens, x = 1 - median_spec, colour = Tes
 g
 
 
-tiff("wells_sroc.tif",units = "in", width = 7, height=5, res=500, compression = "lzw")
+tiff("wells_sroc.tif",units = "in", width = 9, height=5, res=800, compression = "lzw")
 g
 dev.off()
 
@@ -837,14 +841,18 @@ dev.off()
 ## Figure for summary of results from 4 models for section 4.1 (dichotomous Wells)
 ##############################################################################
 
-## first dichot 
-d1_ci <- readRDS(file = "Wells_dichotomous_CI_1st_dichot.rds")   ###  1st dichot, M1 - perfect GS, CI, random thresholds , diff SDs
-d2_ci <- readRDS(file = "Wells_dichotomous_CI_2nd_dichot.rds")   ###  M2 - IGS, CI, fixed thresholds, diff SDs
+d1_ci <- readRDS(file = "Wells_CI_dichot_1st_1000_ad0.95.rds")   ###  1st dichot (H vs M+L), M1 - perfect GS, CI, random thresholds , diff SDs
+d2_ci <- readRDS(file = "Wells_CI_dichot_2nd_1000_ad0.95.rds")   ###  2nd dichot, M2 - IGS, CI, fixed thresholds, diff SDs
 
-d1_cd <- readRDS(file = "Wells_CD_dichot_1st.rds")   ###  M3 - IGS, CI, random thresholds, diff SDs
-d2_cd <- readRDS(file = "Wells_CD_dichot_2nd.rds")   ###  M2 - IGS, CD, fixed thresholds, diff SDs
+d1_cd <- readRDS(file = "Wells_CD_dichot_1st_1000_ad0.95.rds")   ###  M3 - IGS, CI, random thresholds, diff SDs
+d2_cd <- readRDS(file = "Wells_CD_dichot_2nd_1000_ad0.95.rds")   ###  M2 - IGS, CD, fixed thresholds, diff SDs
 
 models2 <- list(d1_ci, d2_ci, d1_cd, d2_cd)
+
+
+print(models2[[1]], pars= c("Se", "Sp", "Wells_DDimer_BTN_Se", "Wells_DDimer_BTN_Sp", "p"
+),
+probs = c(0.025,0.5, 0.975))
 
 ###############################################################
 
@@ -886,10 +894,10 @@ for (i in 1:length(models2)) {
                                                                                           6.9+0.3*(i-1), 
                                                                                           8.9+0.3*(i-1)), 
                                  label  = factor(c("Ultrasound", "D-Dimer", "Wells", 
-                                                   "Wells & D-Dimer, BTN",
-                                                   "Wells & D-Dimer, BTP"), 
-                                                 levels = c("Wells & D-Dimer, BTP",
-                                                            "Wells & D-Dimer, BTN",
+                                                   "Wells & D-Dimer, believe the negatives",
+                                                   "Wells & D-Dimer, believe the positives"), 
+                                                 levels = c("Wells & D-Dimer, believe the positives",
+                                                            "Wells & D-Dimer, believe the negatives",
                                                             "Wells", 
                                                             "D-Dimer",
                                                             "Ultrasound")),
@@ -901,10 +909,10 @@ for (i in 1:length(models2)) {
                                                                                              6.9+0.3*(i-1),
                                                                                              8.9+0.3*(i-1)),
                                  label  = factor(c("Ultrasound", "D-Dimer", "Wells", 
-                                                   "Wells & D-Dimer, BTN",
-                                                   "Wells & D-Dimer, BTP"), 
-                                                 levels = c("Wells & D-Dimer, BTP",
-                                                            "Wells & D-Dimer, BTN",
+                                                   "Wells & D-Dimer, believe the negatives",
+                                                   "Wells & D-Dimer, believe the positives"), 
+                                                 levels = c("Wells & D-Dimer, believe the positives",
+                                                            "Wells & D-Dimer, believe the negatives",
                                                             "Wells", 
                                                             "D-Dimer",
                                                             "Ultrasound")),
@@ -916,28 +924,27 @@ require(data.table)
 data_Se2 <- rbindlist(data_Se_mod)
 data_Sp2 <- rbindlist(data_Sp_mod)
 
-data_Se2$Dichot = c(rep("1st dichotomisation", 5),
-                    rep("2nd dichotomisation", 5),
-                    rep("1st dichotomisation", 5),
-                    rep("2nd dichotomisation", 5))
+data_Se2$Dichot = c(rep("low + moderate vs high", 5),
+                    rep("low vs moderate + high", 5),
+                    rep("low + moderate vs high", 5),
+                    rep("low vs moderate + high", 5))
 
 data_Se2$Mod   =  c(rep("CI", 10),
                     rep("CD", 10))
 
-data_Se2$Model<- factor(data_Se2$Model, labels =c("1st dichotomisation, CI", 
-                                                "2nd dichotomisation, CI", 
-                                                "1st dichotomisation, CD", 
-                                                "2nd dichotomisation, CD"))
+data_Se2$Model<- factor(data_Se2$Model, labels =c("low + moderate vs high, CI", 
+                                                "low vs moderate + high, CI", 
+                                                "low + moderate vs high, CD", 
+                                                "low vs moderate + high, CD"))
 
-data_Sp2$Model<- factor(data_Sp2$Model, labels =c("1st dichotomisation, CI", 
-                                                "2nd dichotomisation, CI", 
-                                                "1st dichotomisation, CD", 
-                                                "2nd dichotomisation, CD"))
-
-data_Sp2$Dichot = c(rep("1st dichotomisation", 5),
-                    rep("2nd dichotomisation", 5),
-                    rep("1st dichotomisation", 5),
-                    rep("2nd dichotomisation", 5))
+data_Sp2$Model<- factor(data_Sp2$Model, labels =c("low + moderate vs high, CI", 
+                                                  "low vs moderate + high, CI", 
+                                                  "low + moderate vs high, CD", 
+                                                  "low vs moderate + high, CD"))
+data_Sp2$Dichot = c(rep("low + moderate vs high", 5),
+                    rep("low vs moderate + high", 5),
+                    rep("low + moderate vs high", 5),
+                    rep("low vs moderate + high", 5))
 
 data_Sp2$Mod   =  c(rep("CI", 10),
                     rep("CD", 10))
@@ -954,36 +961,33 @@ se_plot <- ggplot(tibble(data_Se2), aes(x=(location), y = m, ymin= l,ymax= u, sh
   theme(legend.position = "none") + 
   theme(axis.ticks = element_blank()) + 
   theme(text = element_text(size=16))+ 
-  scale_y_continuous(breaks = seq(0, 1, 0.10)) + 
+  scale_y_continuous(breaks = seq(0, 1, 0.10), limits = c(0,1), labels = seq(0, 100, 10)) + 
   scale_x_discrete( labels = rep("  ", length(data_Se2$location))) + 
   geom_text(aes( label = paste0( m*100," ", "[",l*100,",", u*100 , "]") ,hjust = 1.1, vjust = -0.25),alpha = 0.35) 
-#  scale_x_discrete( labels = c(" ", " ", " ", "Ref", 
-#                               " ", " ", " ", "D-Dimer",
- #                              " ", " ", " ", "Wells", 
-  #                             " ", " ", " ", "Wells & D-Dimer, BTN",
-   #                            " ", " ", " ", "Wells & D-Dimer, BTP"))
 
 se_plot
 
 
-sp_plot <- ggplot(data_Sp2, aes(x=location, y = m, ymin= l,ymax= u, shape = Mod)) + 
+sp_plot <- ggplot(data_Sp2, aes(x=location, y = m, ymin= l,ymax= u, shape = Mod, linetype = Dichot)) + 
   geom_point(size=4, alpha=0.2) + 
-  geom_pointrange(aes(colour=label, linetype = Dichot)) +
+  geom_pointrange(aes(colour=label)) +
   coord_flip() + 
   theme_bw()  + 
   xlab("") + 
   ylab("Specificity")  + 
   theme(legend.title = element_blank()) + 
   theme(text = element_text(size=16))+ 
-  scale_y_continuous(breaks = seq(0, 1, 0.10))+ 
+  scale_y_continuous(breaks = seq(0, 1, 0.10), limits = c(0,1), labels = seq(0, 100, 10)) + 
   scale_x_discrete( labels = rep("  ", length(data_Se2$location))) + 
-  geom_text(aes( label = paste0( m*100," ", "[",l*100,",", u*100 , "]") ,hjust = 1.1, vjust = -0.25), alpha = 0.35) 
-
+  geom_text(aes( label = paste0( m*100," ", "[",l*100,",", u*100 , "]") ,hjust = 1.1, vjust = -0.25), alpha = 0.35) +
+  scale_linetype_manual(values=c(1,2,1,2,1,2),   guide = guide_legend(override.aes = list(shape = NA)))
 
 sp_plot
 
 
-tiff("wells_figure_dichot_summary.tif",units = "in", width = 11, height=7, res=500, compression = "lzw")
+
+
+tiff("wells_figure_dichot_summary.tif",units = "in", width = 11, height=7, res=800, compression = "lzw")
 se_plot + sp_plot
 dev.off()
 
@@ -991,27 +995,76 @@ dev.off()
 #####################
 ### plot of disease prevalences for 1st dichot vs 2nd dichot (CI on left, CD on right)
 
-
-
-g1 <- stan_plot(models2[[1]], pars = c("p"), ncol = 1, show_density = T, ci_level = 0.95, outer_level = 0.95)
-g1
-
-g2<- stan_plot(models2[[2]], pars = c("p"), ncol = 1, show_density = T, ci_level = 0.95, outer_level = 0.95)
-g2
-
 params <- extract(models2[[1]])
 
+data_prevs <- tibble(Study = rep(rep(seq(1,11,1), each = 1000), 4),
+                     Model = rep(seq(1,4,1), each = 11*1000), 
+                     Dichotomisation = factor(labels = c("Low + Moderate vs High", "Low vs Moderate + High"),
+                                              rep(c(rep(1, 11*1000),  rep(2, 11*1000)), 2)), 
+                     Dependence = c(rep("CI", 11*1000*2), rep("CD", 11*1000*2)), 
+                     Samples = c(  c(  extract(models2[[1]])$p[1:1000, 1:11] ), 
+                                   c(  extract(models2[[2]])$p[1:1000, 1:11] ), 
+                                   c(  extract(models2[[3]])$p[1:1000, 1:11] ) , 
+                                   c(  extract(models2[[4]])$p[1:1000, 1:11] )))
 
 
-g1 + g2
+g1 <-    ggplot(data = filter(data_prevs, Dependence == "CI"), aes(x=Samples)) + 
+         geom_density(aes(fill = Dichotomisation), alpha = 0.50) + 
+          facet_wrap( ~ Study, ncol = 1, strip.position = "left") + 
+          xlab("Prevalence (CI)") + 
+          ylab("Study") + 
+          theme_bw() +
+          theme(panel.grid.major = element_blank(),
+                panel.grid.minor = element_blank(),
+             #   strip.background = element_blank(),
+                axis.ticks.y=element_blank(),
+                axis.text.y=element_blank(),
+                panel.border=element_blank()) + 
+          theme(legend.position = "none") 
 
-g1 <- stan_plot(models2[[3]], pars = c("p"), ncol = 1, show_density = T, ci_level = 0.95, outer_level = 0.95)
 g1
 
-g2<- stan_plot(models2[[4]], pars = c("p"), ncol = 1, show_density = T, ci_level = 0.95, outer_level = 0.95)
+g2 <-    ggplot(data = filter(data_prevs, Dependence == "CD"), aes(x=Samples)) + 
+          geom_density(aes(fill = Dichotomisation), alpha = 0.50) + 
+          facet_wrap( ~ Study, ncol = 1, strip.position = "left") + 
+          xlab("Prevalence (CD)") + 
+          ylab(" ") + 
+          theme_bw() +
+          theme(panel.grid.major = element_blank(),
+                panel.grid.minor = element_blank(),
+                strip.background = element_blank(),
+                strip.text = element_blank(),
+                axis.ticks.y=element_blank(),
+                axis.text.y=element_blank(),
+                panel.border=element_blank()) 
 g2
 
+
 g1 + g2
+
+
+tiff("wells_figure_dichot_prevs.tif",units = "in", width = 7, height=7, res=800, compression = "lzw")
+g1 + g2
+dev.off()
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 
 
 
