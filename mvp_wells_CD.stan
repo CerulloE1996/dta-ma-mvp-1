@@ -81,9 +81,7 @@ data {
           int<lower=1> ns[n_studies]; // number of individuals in each study 
           int<lower=0> y[max(ns),nt, n_studies]; // N individuals and nt tests, n_studies studies 
           int r[choose(nt,2), n_studies, 4];
-          int<lower=0> pa[max(ns), n_studies]; 
           int numg;
-          int n_patterns;
           int total_n;
           int ns_cumsum[n_studies];
           int ind[n_studies];  
@@ -103,11 +101,12 @@ parameters {
               cholesky_factor_corr[nt] R_diff_L_nd[n_studies];
               cholesky_factor_corr[nt] R_diff_L_d[n_studies];
               real<lower=0,upper=1> p[n_studies]; 
-
-              vector<lower=0>[Thr[3]+1] alpha_d;
-              vector<lower=0>[Thr[3]+1] alpha_nd;
               ordered[Thr[3]] C_d[n_studies];
               ordered[Thr[3]] C_nd[n_studies];
+              simplex[Thr[3]+1] phi_d;
+              simplex[Thr[3]+1] phi_nd;
+              real<lower=0> kappa_d;
+              real<lower=0> kappa_nd;
 }
 
 transformed parameters { 
@@ -115,6 +114,8 @@ transformed parameters {
               vector[total_n] log_lik; 
               cholesky_factor_corr[nt] L_Omega_nd[n_studies];
               cholesky_factor_corr[nt] L_Omega_d[n_studies];
+              vector<lower=0>[Thr[3]+1] alpha_d = phi_d*kappa_d;
+              vector<lower=0>[Thr[3]+1] alpha_nd = phi_nd*kappa_nd;
 
       {
         for (s in 1:n_studies) {
@@ -195,9 +196,8 @@ transformed parameters {
 }
 
 model {
-
-              alpha_d  ~ normal(0, 10); 
-              alpha_nd ~ normal(0, 10); 
+              kappa_d  ~ normal(0, 50); 
+              kappa_nd ~ normal(0, 50); 
 
         for (s in 1:n_studies) 
                   C_d[s,]  ~  induced_dirichlet(alpha_d, 0);
@@ -222,8 +222,8 @@ model {
           L_Omega_global_nd ~ lkj_corr_cholesky(4);
 
          for (s in 1:n_studies) {
-             R_diff_L_d[s,]  ~ lkj_corr_cholesky(2);
-             R_diff_L_nd[s,] ~ lkj_corr_cholesky(2);
+             R_diff_L_d[s,]  ~ lkj_corr_cholesky(4);
+             R_diff_L_nd[s,] ~ lkj_corr_cholesky(4);
           }
 
           for (s in 1:n_studies) 
@@ -439,10 +439,10 @@ generated quantities {
         rho_nd[3,s]  =  corr(numg, y_hat_nd[,2,s], y_hat_nd[,3,s]); 
         
         // study-specific accuracy estimates 
-        se[s,1]   =      phi_logit_approx(  nu[s,1,1] );
-        sp[s,1]   =      phi_logit_approx( -nu[s,2,1] );
-        se[s,2]   =      phi_logit_approx(  nu[s,1,2] );
-        sp[s,2]   =      phi_logit_approx( -nu[s,2,2] );
+        se[s,1]   =         phi_logit_approx(  nu[s,1,1] );
+        sp[s,1]   =    1 -  phi_logit_approx(  nu[s,2,1] );
+        se[s,2]   =         phi_logit_approx(  nu[s,1,2] );
+        sp[s,2]   =    1 -  phi_logit_approx(  nu[s,2,2] );
 
       // Wells score - prob. of each category
     l[s,1]  =        phi_logit_approx( C_d[s,1] -  nu[s,1,3] ) ; 

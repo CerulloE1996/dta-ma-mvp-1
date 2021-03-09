@@ -35,7 +35,6 @@ data {
           int<lower=0> y[max(ns),nt, n_studies]; // N individuals and nt tests, n_studies studies 
           int r[choose(nt,2), n_studies, 4];
           int numg;
-          int n_patterns;
           int total_n;
           int ns_cumsum[n_studies];
           int ind[n_studies];  
@@ -156,14 +155,6 @@ generated quantities {
     matrix[n_studies,4] o[choose(nt, 2)]; 
     matrix[n_studies,4] ot[choose(nt, 2)]; 
     matrix[n_studies,4] dt[choose(nt, 2)];
-    vector[n_studies] cov_d[choose(nt, 2)]; 
-    vector[n_studies] cov_nd[choose(nt, 2)]; 
-    vector[n_studies] rho_d[choose(nt, 2)]; 
-    vector[n_studies] rho_nd[choose(nt, 2)]; 
-    vector[choose(nt, 2)] cov_global_d; 
-    vector[choose(nt, 2)] cov_global_nd; 
-    vector[choose(nt, 2)] rho_global_d; 
-    vector[choose(nt, 2)] rho_global_nd; 
     matrix[choose(nt, 2),n_studies] ec; 
     matrix[choose(nt, 2),n_studies] oc; 
     matrix[choose(nt, 2),n_studies] dc; 
@@ -189,33 +180,7 @@ generated quantities {
     {
       // Study-specific Estimates
       for (s in 1:n_studies)  {
-        vector[nt] z_d_hat[n_studies, numg]; 
-        vector[nt] z_nd_hat[n_studies, numg]; 
-        int y_hat_d[numg,nt, n_studies]; 
-        int y_hat_nd[numg,nt, n_studies]; 
-        
-        // simulate predictive dist. from posterior for posterior predictive checks 
-        for (n in 1:numg) {
-          for (t in 1:nt) {
-           z_d_hat[s,n,t]    =      normal_rng(nu[s,1,t],  1); 
-           z_nd_hat[s,n,t]   =      normal_rng(nu[s,2,t],  1);
-          }
-          for (i in 1:nt) {    
-            if (z_d_hat[s,n,i] > 0) {   y_hat_d[n,i,s] = 1; }
-            else {  y_hat_d[n,i,s] = 0; }       
-            if (z_nd_hat[s,n,i] > 0) {   y_hat_nd[n,i,s] = 1; }
-            else { y_hat_nd[n,i,s] = 0; }
-          }
-        }
-        // estimate conditional within-study correlations for each study
-        rho_d[1,s]   = 0; // corr(numg, y_hat_d[,1,s], y_hat_d[,2,s]); 
-        rho_d[2,s]   = 0; //corr(numg, y_hat_d[,1,s], y_hat_d[,3,s]); 
-        rho_d[3,s]   = 0; //corr(numg, y_hat_d[,2,s], y_hat_d[,3,s]); 
-        
-        rho_nd[1,s]  = 0; //corr(numg, y_hat_nd[,1,s], y_hat_nd[,2,s]); 
-        rho_nd[2,s]  = 0; //corr(numg, y_hat_nd[,1,s], y_hat_nd[,3,s]); 
-        rho_nd[3,s]  = 0; //corr(numg, y_hat_nd[,2,s], y_hat_nd[,3,s]); 
-        
+           
         // study-specific accuracy estimates 
         se[s,1]   =      phi_logit_approx(  nu[s,1,1] );
         sp[s,1]   =      phi_logit_approx( -nu[s,2,1] );
@@ -226,30 +191,21 @@ generated quantities {
 
         fp[s,] = 1-sp[s,];
         
-        cov_d[1,s]  =  rho_d[1,s]*sqrt( se[s,1]*se[s,2]*(1-se[s,1])*(1-se[s,2]) );
-        cov_d[2,s]  =  rho_d[2,s]*sqrt( se[s,1]*se[s,3]*(1-se[s,1])*(1-se[s,3]) );
-        cov_d[3,s]  =  rho_d[3,s]*sqrt( se[s,2]*se[s,3]*(1-se[s,2])*(1-se[s,3]) );
-
-        cov_nd[1,s] =  rho_nd[1,s]*sqrt( sp[s,1]*sp[s,2]*(1-sp[s,1])*(1-sp[s,2]) );
-        cov_nd[2,s] =  rho_nd[2,s]*sqrt( sp[s,1]*sp[s,3]*(1-sp[s,1])*(1-sp[s,3]) );
-        cov_nd[3,s] =  rho_nd[3,s]*sqrt( sp[s,2]*sp[s,3]*(1-sp[s,2])*(1-sp[s,3]) );
-        
-       
        // ref vs d-dimer
-        pr[1,s,1] =  p[s] * ( se[s,1] * se[s,2]         + cov_d[1,s]) + (1-p[s]) * (  fp[s,1] * fp[s,2]         + cov_nd[1,s] );  
-        pr[1,s,2] =  p[s] * ( se[s,1] * (1-se[s,2])     - cov_d[1,s]) + (1-p[s]) * (  fp[s,1]  * (1-fp[s,2])  - cov_nd[1,s] );
-        pr[1,s,3] =  p[s] * ( (1-se[s,1]) * se[s,2]     - cov_d[1,s]) + (1-p[s]) * ( (1-fp[s,1]) * fp[s,2]     - cov_nd[1,s] ); 
-        pr[1,s,4] =  p[s] * ( (1-se[s,1]) * (1-se[s,2]) + cov_d[1,s]) + (1-p[s]) * ( (1-fp[s,1]) * (1-fp[s,2]) + cov_nd[1,s] );
+        pr[1,s,1] =  p[s] * ( se[s,1] * se[s,2]         ) + (1-p[s]) * (  fp[s,1] * fp[s,2]          );  
+        pr[1,s,2] =  p[s] * ( se[s,1] * (1-se[s,2])     ) + (1-p[s]) * (  fp[s,1]  * (1-fp[s,2])     );
+        pr[1,s,3] =  p[s] * ( (1-se[s,1]) * se[s,2]     ) + (1-p[s]) * ( (1-fp[s,1]) * fp[s,2]       ); 
+        pr[1,s,4] =  p[s] * ( (1-se[s,1]) * (1-se[s,2]) ) + (1-p[s]) * ( (1-fp[s,1]) * (1-fp[s,2])   );
        // ref vs wells
-        pr[2,s,1] =  p[s] * ( se[s,1] * se[s,3]         + cov_d[2,s]) + (1-p[s]) * (  fp[s,1] * fp[s,3]         + cov_nd[2,s] );  
-        pr[2,s,2] =  p[s] * ( se[s,1] * (1-se[s,3])     - cov_d[2,s]) + (1-p[s]) * (  fp[s,1]  * (1-fp[s,3])    - cov_nd[2,s] );
-        pr[2,s,3] =  p[s] * ( (1-se[s,1]) * se[s,3]     - cov_d[2,s]) + (1-p[s]) * ( (1-fp[s,1]) * fp[s,3]      - cov_nd[2,s] ); 
-        pr[2,s,4] =  p[s] * ( (1-se[s,1]) * (1-se[s,3]) + cov_d[2,s]) + (1-p[s]) * ( (1-fp[s,1]) * (1-fp[s,3])  + cov_nd[2,s] );
+        pr[2,s,1] =  p[s] * ( se[s,1] * se[s,3]         ) + (1-p[s]) * (  fp[s,1] * fp[s,3]          );  
+        pr[2,s,2] =  p[s] * ( se[s,1] * (1-se[s,3])     ) + (1-p[s]) * (  fp[s,1]  * (1-fp[s,3])     );
+        pr[2,s,3] =  p[s] * ( (1-se[s,1]) * se[s,3]     ) + (1-p[s]) * ( (1-fp[s,1]) * fp[s,3]       ); 
+        pr[2,s,4] =  p[s] * ( (1-se[s,1]) * (1-se[s,3]) ) + (1-p[s]) * ( (1-fp[s,1]) * (1-fp[s,3])   );
        // d-dimer vs wells
-        pr[3,s,1] =  p[s] * ( se[s,2] * se[s,3]         + cov_d[3,s]) + (1-p[s]) * (  fp[s,2] * fp[s,3]         + cov_nd[3,s] );  
-        pr[3,s,2] =  p[s] * ( se[s,2] * (1-se[s,3])     - cov_d[3,s]) + (1-p[s]) * (  fp[s,2]  * (1-fp[s,3])    - cov_nd[3,s] );
-        pr[3,s,3] =  p[s] * ( (1-se[s,2]) * se[s,3]     - cov_d[3,s]) + (1-p[s]) * ( (1-fp[s,2]) * fp[s,3]      - cov_nd[3,s] ); 
-        pr[3,s,4] =  p[s] * ( (1-se[s,2]) * (1-se[s,3]) + cov_d[3,s]) + (1-p[s]) * ( (1-fp[s,2]) * (1-fp[s,3])  + cov_nd[3,s] );
+        pr[3,s,1] =  p[s] * ( se[s,2] * se[s,3]         ) + (1-p[s]) * (  fp[s,2] * fp[s,3]          );  
+        pr[3,s,2] =  p[s] * ( se[s,2] * (1-se[s,3])     ) + (1-p[s]) * (  fp[s,2]  * (1-fp[s,3])     );
+        pr[3,s,3] =  p[s] * ( (1-se[s,2]) * se[s,3]     ) + (1-p[s]) * ( (1-fp[s,2]) * fp[s,3]       ); 
+        pr[3,s,4] =  p[s] * ( (1-se[s,2]) * (1-se[s,3]) ) + (1-p[s]) * ( (1-fp[s,2]) * (1-fp[s,3])   );
   
        
        // construct model-predicted 2-way table for each study

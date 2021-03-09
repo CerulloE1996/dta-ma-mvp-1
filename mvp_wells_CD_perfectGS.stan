@@ -98,11 +98,12 @@ parameters {
               cholesky_factor_corr[nt] R_diff_L_d_pre[n_studies];
               cholesky_factor_corr[nt] R_diff_L_nd_pre[n_studies];
               real<lower=0,upper=1> p[n_studies]; 
-
-              vector<lower=0>[Thr[3]+1] alpha_d;
-              vector<lower=0>[Thr[3]+1] alpha_nd;
               ordered[Thr[3]] C_d[n_studies];
               ordered[Thr[3]] C_nd[n_studies];
+              simplex[Thr[3]+1] phi_d;
+              simplex[Thr[3]+1] phi_nd;
+              real<lower=0> kappa_d;
+              real<lower=0> kappa_nd;
 
 }
 
@@ -112,20 +113,20 @@ transformed parameters {
               vector[total_n] log_lik; 
               cholesky_factor_corr[nt] L_Omega_d[n_studies];
               cholesky_factor_corr[nt] L_Omega_nd[n_studies];
-
               corr_matrix[nt] R_diff_d_pre[n_studies];
               corr_matrix[nt] R_diff_nd_pre[n_studies];
               corr_matrix[nt] R_diff_d[n_studies];
               corr_matrix[nt] R_diff_nd[n_studies];
               cholesky_factor_corr[nt] R_diff_L_d[n_studies];
               cholesky_factor_corr[nt] R_diff_L_nd[n_studies];
-
               corr_matrix[nt] Omega_global_d_pre;
               corr_matrix[nt] Omega_global_nd_pre;
               corr_matrix[nt] Omega_global_d;
               corr_matrix[nt] Omega_global_nd;
               cholesky_factor_corr[nt] L_Omega_global_d;
               cholesky_factor_corr[nt] L_Omega_global_nd;
+              vector<lower=0>[Thr[3]+1] alpha_d = phi_d*kappa_d;
+              vector<lower=0>[Thr[3]+1] alpha_nd = phi_nd*kappa_nd;
 
 
              mu[1,1] = 5;
@@ -239,11 +240,8 @@ transformed parameters {
 }
 
 model {
-            //  alpha_d  ~ exponential(0.20);
-            //  alpha_nd ~ exponential(0.20);
-
-              alpha_d  ~ normal(0, 10);
-              alpha_nd ~ normal(0, 10);
+              kappa_d  ~ normal(0, 50); 
+              kappa_nd ~ normal(0, 50); 
 
         for (s in 1:n_studies) 
                   C_d[s,]  ~  induced_dirichlet(alpha_d, 0);
@@ -265,8 +263,8 @@ model {
           L_Omega_global_nd ~ lkj_corr_cholesky(4);
 
          for (s in 1:n_studies) {
-             R_diff_L_d[s,] ~ lkj_corr_cholesky(2);
-             R_diff_L_nd[s,] ~ lkj_corr_cholesky(2);
+             R_diff_L_d[s,]  ~ lkj_corr_cholesky(4);
+             R_diff_L_nd[s,] ~ lkj_corr_cholesky(4);
           }
 
           for (s in 1:n_studies) 

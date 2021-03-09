@@ -92,15 +92,19 @@ parameters {
               cholesky_factor_corr[2] L_Omega_bs[nt];
               matrix[2,nt] z[n_studies];
               real<lower=0,upper=1> p[n_studies]; 
-              vector<lower=0>[Thr[3]+1] alpha_d;
-              vector<lower=0>[Thr[3]+1] alpha_nd;
               ordered[Thr[3]] C_d[n_studies];
               ordered[Thr[3]] C_nd[n_studies];
+              simplex[Thr[3]+1] phi_d;
+              simplex[Thr[3]+1] phi_nd;
+              real<lower=0> kappa_d;
+              real<lower=0> kappa_nd;
 }
 
 transformed parameters { 
               matrix[2,nt] nu[n_studies];
               vector[total_n] log_lik; 
+              vector<lower=0>[Thr[3]+1] alpha_d = phi_d*kappa_d;
+              vector<lower=0>[Thr[3]+1] alpha_nd = phi_nd*kappa_nd;
 
                       // between-study model
                 for (s in 1:n_studies) 
@@ -178,9 +182,8 @@ transformed parameters {
 }
 
 model {
-
-              alpha_d  ~ normal(0, 10);
-              alpha_nd ~ normal(0, 10);
+              kappa_d  ~ normal(0, 50); 
+              kappa_nd ~ normal(0, 50); 
 
         for (s in 1:n_studies) 
                   C_d[s,]  ~  induced_dirichlet(alpha_d, 0);
@@ -247,9 +250,7 @@ generated quantities {
     vector[Thr[3]+1] p_ndm;
     vector[Thr[3]] C_ndm;
     vector[Thr[3]] C_ndm2;
-    vector[2] pred_dichot_1;
-    vector[2] pred_dichot_2;
-    vector[2] pred;
+    matrix[2, nt] pred;
 
     for (i in 1:numg) 
         p_dm_sim[i,]  =  dirichlet_rng(alpha_d);
@@ -262,6 +263,8 @@ generated quantities {
     
     for (i in 1:(Thr[3]+1)) 
          p_ndm[i] = mean(p_ndm_sim[,i]); 
+
+
        C_dm[1] =    inv_phi_logit_approx(p_dm[1]); 
     for (i in 2:Thr[3]) 
       C_dm[i] =    inv_phi_logit_approx(p_dm[i] + phi_logit_approx(C_dm[i-1])); 
@@ -383,5 +386,4 @@ generated quantities {
        }                                    
       }    
     }
-  }
 

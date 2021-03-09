@@ -44,9 +44,7 @@ data {
           int<lower=1> ns[n_studies]; // number of individuals in each study 
           int<lower=0> y[max(ns),nt, n_studies]; // N individuals and nt tests, n_studies studies 
           int r[choose(nt,2), n_studies, 4];
-          int<lower=0> pa[max(ns), n_studies]; 
           int numg;
-          int n_patterns;
           int ns_cumsum[n_studies];
           int ind[n_studies];
 }
@@ -172,8 +170,8 @@ model {
           L_Omega_global_nd ~ lkj_corr_cholesky(4);
 
          for (s in 1:n_studies) {
-             R_diff_L_d[s,]  ~ lkj_corr_cholesky(2);
-             R_diff_L_nd[s,] ~ lkj_corr_cholesky(2);
+             R_diff_L_d[s,]  ~ lkj_corr_cholesky(4);
+             R_diff_L_nd[s,] ~ lkj_corr_cholesky(4);
           }
 
           for (s in 1:n_studies) { // likelihood

@@ -82,13 +82,10 @@ data {
           int<lower=1> ns[n_studies]; // number of individuals in each study 
           int<lower=0> y[max(ns),nt, n_studies]; // N individuals and nt tests, n_studies studies 
           int r[choose(nt,2), n_studies, 4];
-          int<lower=0> pa[max(ns), n_studies]; 
           int numg;
-          int n_patterns;
           int total_n;
           int ns_cumsum[n_studies];
           int ind[n_studies];  
-          real scale1;
 }
 
 parameters {
@@ -99,16 +96,20 @@ parameters {
               cholesky_factor_corr[2] L_Omega_bs[nt];
               matrix[2,nt] z[n_studies];
               real<lower=0,upper=1> p[n_studies]; 
-              vector<lower=0>[Thr[3]+1] alpha_d;
-              vector<lower=0>[Thr[3]+1] alpha_nd;
               ordered[Thr[3]] C_d[n_studies];
               ordered[Thr[3]] C_nd[n_studies];
+              simplex[Thr[3]+1] phi_d;
+              simplex[Thr[3]+1] phi_nd;
+              real<lower=0> kappa_d;
+              real<lower=0> kappa_nd;
 }
 
 transformed parameters { 
               matrix[2, nt] mu;
               matrix[2,nt] nu[n_studies];
               vector[total_n] log_lik; 
+              vector<lower=0>[Thr[3]+1] alpha_d = phi_d*kappa_d;
+              vector<lower=0>[Thr[3]+1] alpha_nd = phi_nd*kappa_nd;
 
              mu[1,1] = 5;
              mu[2,1] = -5;
@@ -193,9 +194,8 @@ transformed parameters {
 }
 
 model {
-
-              alpha_d  ~ normal(0, 10);
-              alpha_nd ~ normal(0, 10);
+              kappa_d  ~ normal(0, 50); 
+              kappa_nd ~ normal(0, 50); 
 
         for (s in 1:n_studies) 
                   C_d[s,]  ~  induced_dirichlet(alpha_d, 0 );
@@ -276,17 +276,17 @@ for (i in 1:numg)
          p_ndm[i] = mean(p_ndm_sim[,i]); 
 
 
-       C_dm[1] =    scale1*inv_phi_logit_approx(p_dm[1]); 
+       C_dm[1] =    inv_phi_logit_approx(p_dm[1]); 
    for (i in 2:Thr[3]) 
-      C_dm[i] =    scale1*inv_phi_logit_approx(p_dm[i] + phi_logit_approx(C_dm[i-1]/scale1)); 
+      C_dm[i] =    inv_phi_logit_approx(p_dm[i] + phi_logit_approx(C_dm[i-1])); 
 
        C_dm2[1] =   inv_phi_logit_approx(p_dm_sim[1,1]); 
    for (i in 2:Thr[3]) 
        C_dm2[i] =    inv_phi_logit_approx(p_dm_sim[1,i] + phi_logit_approx(C_dm2[i-1])); 
 
-       C_ndm[1] =    scale1*inv_phi_logit_approx(p_ndm[1]); 
+       C_ndm[1] =    inv_phi_logit_approx(p_ndm[1]); 
    for (i in 2:Thr[3]) 
-      C_ndm[i] =    scale1*inv_phi_logit_approx(p_ndm[i] + phi_logit_approx(C_ndm[i-1]/scale1)); 
+      C_ndm[i] =    inv_phi_logit_approx(p_ndm[i] + phi_logit_approx(C_ndm[i-1])); 
 
        C_ndm2[1] =   inv_phi_logit_approx(p_ndm_sim[1,1]); 
    for (i in 2:Thr[3]) 
@@ -300,35 +300,18 @@ for (i in 1:numg)
     Sp[2]  =    phi_logit_approx( - mu[2,2]  );
 
       // Wells score - prob. of each category
-    L[1]  =        phi_logit_approx( C_dm[1] -  mu_location[1]) ; 
-    M[1]  =        phi_logit_approx( C_dm[2] -  mu_location[1]) -  phi_logit_approx( C_dm[1] -  mu_location[1]) ; 
-    H[1]  =    1 - phi_logit_approx( C_dm[2] - mu_location[1]) ; 
+    L[1]  =        phi_logit_approx( C_dm[1] -  mu[1,3] ) ; 
+    M[1]  =        phi_logit_approx( C_dm[2] -  mu[1,3]) -  phi_logit_approx( C_dm[1] -  mu[1,3]) ; 
+    H[1]  =    1 - phi_logit_approx( C_dm[2] -  mu[1,3]) ; 
 
-    L[2]  =        phi_logit_approx( C_ndm[1] -  mu_location[2]) ; 
-    M[2]  =        phi_logit_approx( C_ndm[2] -  mu_location[2]) - phi_logit_approx( C_ndm[1] -  mu_location[2]); 
-    H[2]  =    1 - phi_logit_approx( C_ndm[2] -  mu_location[2]) ; 
+    L[2]  =        phi_logit_approx( C_ndm[1] -  mu[2,3]) ; 
+    M[2]  =        phi_logit_approx( C_ndm[2] -  mu[2,3]) - phi_logit_approx( C_ndm[1] -  mu[2,3]); 
+    H[2]  =    1 - phi_logit_approx( C_ndm[2] -  mu[2,3]) ; 
 
     // Wells score - dichotomise as low vs (moderate + high) [first cut-off]
     Se[3] = 1 - L[1]; // M[1] + H[1]; =  phi_logit_approx( mu[1,3] -  C_dm[1]    );
     Sp[3] =  L[2] ; // 1- (M[2] + H[2]); = 1 - phi_logit_approx(  mu[2,3] - C_dm[1]  );
 
-
-    
-      // estimate global conditional correlations 
-      rho_global_d[1]   = corr(numg, y_hat_dg[,1], y_hat_dg[,2]); 
-      rho_global_d[2]   = corr(numg, y_hat_dg[,1], y_hat_dg[,3]); 
-      rho_global_d[3]   = corr(numg, y_hat_dg[,2], y_hat_dg[,3]); 
-      rho_global_nd[1]  = corr(numg, y_hat_ndg[,1], y_hat_ndg[,2]); 
-      rho_global_nd[2]  = corr(numg, y_hat_ndg[,1], y_hat_ndg[,3]); 
-      rho_global_nd[3]  = corr(numg, y_hat_ndg[,2], y_hat_ndg[,3]); 
-      
-      // estimate global covariance parameters
-      cov_global_d[1]  =  rho_global_d[1]*sqrt( Se[1]*Se[2]*(1-Se[1])*(1-Se[2]) );
-      cov_global_d[2]  =  rho_global_d[2]*sqrt( Se[1]*Se[3]*(1-Se[1])*(1-Se[3]) );
-      cov_global_d[3]  =  rho_global_d[3]*sqrt( Se[2]*Se[3]*(1-Se[2])*(1-Se[3]) );
-      cov_global_nd[1] =  rho_global_nd[1]*sqrt( Sp[1]*Sp[2]*(1-Sp[1])*(1-Sp[2]) );
-      cov_global_nd[2] =  rho_global_nd[2]*sqrt( Sp[1]*Sp[3]*(1-Sp[1])*(1-Sp[3]) );
-      cov_global_nd[3] =  rho_global_nd[3]*sqrt( Sp[2]*Sp[3]*(1-Sp[2])*(1-Sp[3]) );
       
       // estimate joint test accuracy estimates for Wells and D-Dimer
       Wells_DDimer_BTN_Se = Se[2]*Se[3] ;
@@ -352,13 +335,13 @@ for (i in 1:numg)
         sp[s,2]   =      phi_logit_approx( -nu[s,2,2] );
 
       // Wells score - prob. of each category
-    l[s,1]  =    phi_logit_approx( (C_d[s,1] -  (nu_locations[s,1]))  ) ; 
-    m[s,1]  =    phi_logit_approx( (C_d[s,2] -  (nu_locations[s,1])) )  - phi_logit_approx( (C_d[s,1] - (nu_locations[s,1])) ) ; 
-    h[s,1]  =    1 - phi_logit_approx( (C_d[s,2] -  (nu_locations[s,1]))  ) ; 
+    l[s,1]  =    phi_logit_approx( C_d[s,1] -  nu[s,1,3] ) ; 
+    m[s,1]  =    phi_logit_approx( (C_d[s,2] -  nu[s,1,3]) )  - phi_logit_approx( (C_d[s,1] - nu[s,1,3]) ) ; 
+    h[s,1]  =    1 - phi_logit_approx( (C_d[s,2] -  nu[s,1,3])  ) ; 
 
-    l[s,2]  =    phi_logit_approx( (C_nd[s,1] -  (nu_locations[s,2]))  ) ; 
-    m[s,2]  =    phi_logit_approx( (C_nd[s,2] -  (nu_locations[s,2])) )  - phi_logit_approx( (C_nd[s,1] -  (nu_locations[s,2])) ) ; 
-    h[s,2]  =    1 - phi_logit_approx( (C_nd[s,2] -  (nu_locations[s,2]))  ) ;
+    l[s,2]  =    phi_logit_approx( (C_nd[s,1] -  nu[s,2,3])  ) ; 
+    m[s,2]  =    phi_logit_approx( (C_nd[s,2] -  nu[s,2,3]) )  - phi_logit_approx( (C_nd[s,1] -  nu[s,2,3]) ) ; 
+    h[s,2]  =    1 - phi_logit_approx( (C_nd[s,2] -  nu[s,2,3])  ) ;
 
         se[s,3] = m[s,1] + h[s,1];
         sp[s,3] = 1- (m[s,2] + h[s,2]); 
@@ -366,20 +349,20 @@ for (i in 1:numg)
        
         
        // ref vs d-dimer
-        pr[1,s,1] =  p[s] * ( se[s,1] * se[s,2]         + cov_d[1,s]) + (1-p[s]) * (  fp[s,1] * fp[s,2]         + cov_nd[1,s] );  
-        pr[1,s,2] =  p[s] * ( se[s,1] * (1-se[s,2])     - cov_d[1,s]) + (1-p[s]) * (  fp[s,1]  * (1-fp[s,2])  - cov_nd[1,s] );
-        pr[1,s,3] =  p[s] * ( (1-se[s,1]) * se[s,2]     - cov_d[1,s]) + (1-p[s]) * ( (1-fp[s,1]) * fp[s,2]     - cov_nd[1,s] ); 
-        pr[1,s,4] =  p[s] * ( (1-se[s,1]) * (1-se[s,2]) + cov_d[1,s]) + (1-p[s]) * ( (1-fp[s,1]) * (1-fp[s,2]) + cov_nd[1,s] );
+        pr[1,s,1] =  p[s] * ( se[s,1] * se[s,2]         ) + (1-p[s]) * (  fp[s,1] * fp[s,2]          );  
+        pr[1,s,2] =  p[s] * ( se[s,1] * (1-se[s,2])     ) + (1-p[s]) * (  fp[s,1]  * (1-fp[s,2])  );
+        pr[1,s,3] =  p[s] * ( (1-se[s,1]) * se[s,2]     ) + (1-p[s]) * ( (1-fp[s,1]) * fp[s,2]      ); 
+        pr[1,s,4] =  p[s] * ( (1-se[s,1]) * (1-se[s,2]) ) + (1-p[s]) * ( (1-fp[s,1]) * (1-fp[s,2]) );
        // ref vs wells
-        pr[2,s,1] =  p[s] * ( se[s,1] * se[s,3]         + cov_d[2,s]) + (1-p[s]) * (  fp[s,1] * fp[s,3]         + cov_nd[2,s] );  
-        pr[2,s,2] =  p[s] * ( se[s,1] * (1-se[s,3])     - cov_d[2,s]) + (1-p[s]) * (  fp[s,1]  * (1-fp[s,3])    - cov_nd[2,s] );
-        pr[2,s,3] =  p[s] * ( (1-se[s,1]) * se[s,3]     - cov_d[2,s]) + (1-p[s]) * ( (1-fp[s,1]) * fp[s,3]      - cov_nd[2,s] ); 
-        pr[2,s,4] =  p[s] * ( (1-se[s,1]) * (1-se[s,3]) + cov_d[2,s]) + (1-p[s]) * ( (1-fp[s,1]) * (1-fp[s,3])  + cov_nd[2,s] );
+        pr[2,s,1] =  p[s] * ( se[s,1] * se[s,3]         ) + (1-p[s]) * (  fp[s,1] * fp[s,3]          );  
+        pr[2,s,2] =  p[s] * ( se[s,1] * (1-se[s,3])     ) + (1-p[s]) * (  fp[s,1]  * (1-fp[s,3])    );
+        pr[2,s,3] =  p[s] * ( (1-se[s,1]) * se[s,3]    ) + (1-p[s]) * ( (1-fp[s,1]) * fp[s,3]       ); 
+        pr[2,s,4] =  p[s] * ( (1-se[s,1]) * (1-se[s,3]) ) + (1-p[s]) * ( (1-fp[s,1]) * (1-fp[s,3])   );
        // d-dimer vs wells
-        pr[3,s,1] =  p[s] * ( se[s,2] * se[s,3]         + cov_d[3,s]) + (1-p[s]) * (  fp[s,2] * fp[s,3]         + cov_nd[3,s] );  
-        pr[3,s,2] =  p[s] * ( se[s,2] * (1-se[s,3])     - cov_d[3,s]) + (1-p[s]) * (  fp[s,2]  * (1-fp[s,3])    - cov_nd[3,s] );
-        pr[3,s,3] =  p[s] * ( (1-se[s,2]) * se[s,3]     - cov_d[3,s]) + (1-p[s]) * ( (1-fp[s,2]) * fp[s,3]      - cov_nd[3,s] ); 
-        pr[3,s,4] =  p[s] * ( (1-se[s,2]) * (1-se[s,3]) + cov_d[3,s]) + (1-p[s]) * ( (1-fp[s,2]) * (1-fp[s,3])  + cov_nd[3,s] );
+        pr[3,s,1] =  p[s] * ( se[s,2] * se[s,3]         ) + (1-p[s]) * (  fp[s,2] * fp[s,3]          );  
+        pr[3,s,2] =  p[s] * ( se[s,2] * (1-se[s,3])     ) + (1-p[s]) * (  fp[s,2]  * (1-fp[s,3])     );
+        pr[3,s,3] =  p[s] * ( (1-se[s,2]) * se[s,3]     ) + (1-p[s]) * ( (1-fp[s,2]) * fp[s,3]      ); 
+        pr[3,s,4] =  p[s] * ( (1-se[s,2]) * (1-se[s,3]) ) + (1-p[s]) * ( (1-fp[s,2]) * (1-fp[s,3])   );
   
        
        // construct model-predicted 2-way table for each study
