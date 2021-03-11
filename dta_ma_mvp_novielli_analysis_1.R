@@ -16,6 +16,11 @@ require(loo)
 require(bayesSurv)
 require(scales)
 require(ggrepel)
+require(MCMCpack)
+require(hexbin)
+require(latex2exp)
+require(truncnorm)
+
 
 # INSTALL CmDStan - see https://mc-stan.org/cmdstanr/articles/cmdstanr.html
 #devtools::install_github("stan-dev/cmdstanr", force = TRUE)
@@ -164,9 +169,6 @@ for (s in 1:n) {
 }
 
 init = list(
-            a1_m_raw = c(-2, 0.85), 
-            a2_m_raw = c(-0.35, 1.60),
-            a3_m_raw = c(-0.82, 0.80),
             mu = t(matrix(data = c(0.7,  2,  0.5, 
                                 -2, -1, -1), ncol = 2))    ,
             sd1 = t(matrix(data = c(0.5,  0.2,  1, 
@@ -238,11 +240,12 @@ meta_model2r <- rstan::read_stan_csv(meta_model2$output_files())  # convert to r
 
 print(meta_model2r, pars= c("Se", "Sp", "Wells_DDimer_BTN_Se", "Wells_DDimer_BTN_Sp",
                             "Wells_DDimer_BTP_Se", "Wells_DDimer_BTP_Sp", "rho_global_d","rho_global_nd","p",
-                            "alpha_d", "alpha_nd", "C_dm",
-                            "beta_d", "beta_nd", 
-                             "C_dm2",
-                            "C_ndm", "C_ndm2" ,
-                              "sd1", "Omega_global_d","Omega_global_nd"
+                            "alpha_d", "alpha_nd"
+                            #"C_dm"
+                          #  "beta_d", "beta_nd", 
+                          #   "C_dm2",
+                          #  "C_ndm", "C_ndm2" ,
+                          #    "sd1", "Omega_global_d","Omega_global_nd"
                          #   "Se_pred", "Sp_pred", "Wells_DDimer_BTP_Se_pred", "Wells_DDimer_BTP_Sp_pred",
                       #    "Wells_DDimer_BTN_Se_pred", "Wells_DDimer_BTN_Sp_pred"
                          #   "L", "M", "H", "p_dm", "mu"
@@ -262,7 +265,7 @@ probs = c(0.025,0.5, 0.975))
 #saveRDS(meta_model2r, file = "Wells_CI_1000_ad0.95") # M3
 #saveRDS(meta_model2r, file = "Wells_CD_1000_ad0.95") # M4
 
-#print(meta_model2r, pars= c("L_Omega_d", "L_Omega_nd", "alpha_d", "alpha_nd", "C_d", "C_nd"),probs = c(0.025,0.5, 0.975))
+print(meta_model2r, pars= c("L_Omega_d", "L_Omega_nd", "alpha_d", "alpha_nd"),probs = c(0.025,0.5, 0.975))
 
 #############################################################################################
 # observed - expected correlation plots 
@@ -472,10 +475,10 @@ for (i in 1:length(models)) {
                                                                                             9.9+0.4*(i-1), 
                                                                                             12.9+0.4*(i-1)), 
                                label  = factor(c("Ultrasound", "D-Dimer", "Wells", 
-                                                 "Wells & D-Dimer, believe the negatives",
-                                                 "Wells & D-Dimer, believe the positives"), 
-                                               levels = c("Wells & D-Dimer, believe the positives",
-                                                          "Wells & D-Dimer, believe the negatives",
+                                                 "Wells & D-Dimer, \nbelieve the negatives",
+                                                 "Wells & D-Dimer, \nbelieve the positives"), 
+                                               levels = c("Wells & D-Dimer, \nbelieve the positives",
+                                                          "Wells & D-Dimer, \nbelieve the negatives",
                                                           "Wells", 
                                                           "D-Dimer",
                                                           "Ultrasound")),
@@ -487,10 +490,10 @@ for (i in 1:length(models)) {
                                                                                                9.9+0.4*(i-1), 
                                                                                                12.9+0.4*(i-1)),
                                label  = factor(c("Ultrasound", "D-Dimer", "Wells", 
-                                                 "Wells & D-Dimer, believe the negatives",
-                                                 "Wells & D-Dimer, believe the positives"), 
-                                               levels = c("Wells & D-Dimer, believe the positives",
-                                                          "Wells & D-Dimer, believe the negatives",
+                                                 "Wells & D-Dimer, \nbelieve the negatives",
+                                                 "Wells & D-Dimer, \nbelieve the positives"), 
+                                               levels = c("Wells & D-Dimer, \nbelieve the positives",
+                                                          "Wells & D-Dimer, \nbelieve the negatives",
                                                           "Wells", 
                                                           "D-Dimer",
                                                           "Ultrasound")),
@@ -640,7 +643,7 @@ sp_plot <- ggplot(data_Sp, aes(x=location, y = m, ymin= l,ymax= u, shape = Model
 
 sp_plot
 
-tiff("wells_figure_summary.tif",units = "in", width = 10, height=7, res=800, compression = "lzw")
+tiff("wells_figure_summary.tif",units = "in", width = 9, height=7, res=800, compression = "lzw")
 se_plot + sp_plot
 dev.off()
 
@@ -688,10 +691,10 @@ cred <- rbindlist(cred_1, idcol = TRUE)
 cred_p <- rbindlist(cred_1p, idcol = TRUE)
 
 cred2 <- mutate(cred,  Test = factor(.id, label  = factor(c("Ultrasound", "D-Dimer", "Wells", 
-                                                            "Wells & D-Dimer, believe the negatives",
-                                                            "Wells & D-Dimer, believe the positives"), 
-                                                          levels = c("Wells & D-Dimer, believe the positives",
-                                                                     "Wells & D-Dimer, believe the negatives",
+                                                            "Wells & D-Dimer,\nbelieve the negatives",
+                                                            "Wells & D-Dimer,\nbelieve the positives"), 
+                                                          levels = c("Wells & D-Dimer,\nbelieve the positives",
+                                                                     "Wells & D-Dimer,\nbelieve the negatives",
                                                                      "Wells", 
                                                                      "D-Dimer",
                                                                      "Ultrasound"))))
@@ -711,10 +714,10 @@ el = pb$data[[1]][c("x","y", "group")]
 
   
 credible_region <- tibble(x = pnorm2(el$x), y = pnorm2(el$y), Test = factor(el$group, label  = factor(c("Ultrasound", "D-Dimer", "Wells", 
-                                                                                                        "Wells & D-Dimer, believe the negatives",
-                                                                                                        "Wells & D-Dimer, believe the positives"), 
-                                                                                                      levels = c("Wells & D-Dimer, believe the positives",
-                                                                                                                 "Wells & D-Dimer, believe the negatives",
+                                                                                                        "Wells & D-Dimer,\nbelieve the negatives",
+                                                                                                        "Wells & D-Dimer,\nbelieve the positives"), 
+                                                                                                      levels = c("Wells & D-Dimer,\nbelieve the positives",
+                                                                                                                 "Wells & D-Dimer,\nbelieve the negatives",
                                                                                                                  "Wells", 
                                                                                                                  "D-Dimer",
                                                                                                                  "Ultrasound"))))
@@ -744,10 +747,10 @@ pred <- rbindlist(pred_1, idcol = TRUE)
 pred_p <- rbindlist(pred_1p, idcol = TRUE)
 
 pred2 <- mutate(pred,  Test = factor(.id, label  = factor(c("Ultrasound", "D-Dimer", "Wells", 
-                                                            "Wells & D-Dimer, believe the negatives",
-                                                            "Wells & D-Dimer, believe the positives"), 
-                                                          levels = c("Wells & D-Dimer, believe the positives",
-                                                                     "Wells & D-Dimer, believe the negatives",
+                                                            "Wells & D-Dimer,\nbelieve the negatives",
+                                                            "Wells & D-Dimer,\nbelieve the positives"), 
+                                                          levels = c("Wells & D-Dimer,\nbelieve the positives",
+                                                                     "Wells & D-Dimer,\nbelieve the negatives",
                                                                      "Wells", 
                                                                      "D-Dimer",
                                                                      "Ultrasound"))))
@@ -767,10 +770,10 @@ el = pb$data[[1]][c("x","y", "group")]
 
 
 pred_region <- tibble(x = pnorm2(el$x), y = pnorm2(el$y), Test = factor(el$group, label  = factor(c("Ultrasound", "D-Dimer", "Wells", 
-                                                                                                      "Wells & D-Dimer, believe the negatives",
-                                                                                                      "Wells & D-Dimer, believe the positives"), 
-                                                                                                    levels = c("Wells & D-Dimer, believe the positives",
-                                                                                                               "Wells & D-Dimer, believe the negatives",
+                                                                                                      "Wells & D-Dimer,\nbelieve the negatives",
+                                                                                                      "Wells & D-Dimer,\nbelieve the positives"), 
+                                                                                                    levels = c("Wells & D-Dimer,\nbelieve the positives",
+                                                                                                               "Wells & D-Dimer,\nbelieve the negatives",
                                                                                                                "Wells", 
                                                                                                                "D-Dimer",
                                                                                                                "Ultrasound"))))
@@ -792,10 +795,10 @@ median_spec <- c(round(summary(mod, probs = c(0.025,  0.5, 0.975), pars = c("Sp"
                  round(summary(mod, probs = c(0.025,  0.5, 0.975), pars = c("Wells_DDimer_BTN_Sp", "Wells_DDimer_BTP_Sp"))$summary[,5], 2))
 
 medians <- tibble(median_sens = median_sens, median_spec = median_spec, Test = factor( c(1:5), label  = factor(c("Ultrasound", "D-Dimer", "Wells", 
-                                                                                                         "Wells & D-Dimer, believe the negatives",
-                                                                                                         "Wells & D-Dimer, believe the positives"), 
-                                                                                                       levels = c("Wells & D-Dimer, believe the positives",
-                                                                                                                  "Wells & D-Dimer, believe the negatives",
+                                                                                                         "Wells & D-Dimer,\nbelieve the negatives",
+                                                                                                         "Wells & D-Dimer,\nbelieve the positives"), 
+                                                                                                       levels = c("Wells & D-Dimer,\nbelieve the positives",
+                                                                                                                  "Wells & D-Dimer,\nbelieve the negatives",
                                                                                                                   "Wells", 
                                                                                                                   "D-Dimer",
                                                                                                                   "Ultrasound"))))
@@ -832,7 +835,7 @@ g <- ggplot(data = medians, aes(y=median_sens, x = 1 - median_spec, colour = Tes
 g
 
 
-tiff("wells_sroc.tif",units = "in", width = 9, height=5, res=800, compression = "lzw")
+tiff("wells_sroc.tif",units = "in", width = 6, height=4, res=800, compression = "lzw")
 g
 dev.off()
 
@@ -850,7 +853,7 @@ d2_cd <- readRDS(file = "Wells_CD_dichot_2nd_1000_ad0.95.rds")   ###  M2 - IGS, 
 models2 <- list(d1_ci, d2_ci, d1_cd, d2_cd)
 
 
-print(models2[[1]], pars= c("Se", "Sp", "Wells_DDimer_BTN_Se", "Wells_DDimer_BTN_Sp", "p"
+print(models2[[3]], pars= c("Se", "Sp", "Wells_DDimer_BTN_Se", "Wells_DDimer_BTN_Sp", "p"
 ),
 probs = c(0.025,0.5, 0.975))
 
@@ -894,10 +897,10 @@ for (i in 1:length(models2)) {
                                                                                           6.9+0.3*(i-1), 
                                                                                           8.9+0.3*(i-1)), 
                                  label  = factor(c("Ultrasound", "D-Dimer", "Wells", 
-                                                   "Wells & D-Dimer, believe the negatives",
-                                                   "Wells & D-Dimer, believe the positives"), 
-                                                 levels = c("Wells & D-Dimer, believe the positives",
-                                                            "Wells & D-Dimer, believe the negatives",
+                                                   "Wells & D-Dimer, \nbelieve the negatives",
+                                                   "Wells & D-Dimer, \nbelieve the positives"), 
+                                                 levels = c("Wells & D-Dimer, \nbelieve the positives",
+                                                            "Wells & D-Dimer, \nbelieve the negatives",
                                                             "Wells", 
                                                             "D-Dimer",
                                                             "Ultrasound")),
@@ -909,10 +912,10 @@ for (i in 1:length(models2)) {
                                                                                              6.9+0.3*(i-1),
                                                                                              8.9+0.3*(i-1)),
                                  label  = factor(c("Ultrasound", "D-Dimer", "Wells", 
-                                                   "Wells & D-Dimer, believe the negatives",
-                                                   "Wells & D-Dimer, believe the positives"), 
-                                                 levels = c("Wells & D-Dimer, believe the positives",
-                                                            "Wells & D-Dimer, believe the negatives",
+                                                   "Wells & D-Dimer, \nbelieve the negatives",
+                                                   "Wells & D-Dimer, \nbelieve the positives"), 
+                                                 levels = c("Wells & D-Dimer, \nbelieve the positives",
+                                                            "Wells & D-Dimer, \nbelieve the negatives",
                                                             "Wells", 
                                                             "D-Dimer",
                                                             "Ultrasound")),
@@ -987,7 +990,7 @@ sp_plot
 
 
 
-tiff("wells_figure_dichot_summary.tif",units = "in", width = 11, height=7, res=800, compression = "lzw")
+tiff("wells_figure_dichot_summary.tif",units = "in", width = 9, height=6, res=800, compression = "lzw")
 se_plot + sp_plot
 dev.off()
 
@@ -1050,6 +1053,34 @@ dev.off()
 
 
 
+
+#############################
+# prior predictive check plot
+
+N <- 1e4
+K <- 3
+
+res <- array(NA_real_, dim = c(K, N))
+
+kappa <- truncnorm::rtruncnorm(N, a = 0, mean =  0, sd = 50)
+
+phi <- MCMCpack::rdirichlet(N, rep(1, K)) 
+for(i in 1:N) {
+  res[,i] <- MCMCpack::rdirichlet(1, kappa[i]*phi[i,])
+}
+
+df <- data.frame(p1 = res[1,], p2 = res[2,], dist = 1) %>% filter(!is.na(p1), !is.na(p2))     
+
+g1 <- ggplot(df, aes(p1, p2)) + 
+  geom_hex() + 
+  scale_fill_continuous(trans = "log10") +
+  theme_bw() + 
+  xlab(TeX("$P_{i}$")) + 
+  ylab(TeX("$P_{j}$")) + 
+  xlim(0,1) + 
+  ylim(0,1)
+
+g1
 
 
 
